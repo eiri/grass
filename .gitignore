@@ -1,6 +1,6 @@
+.DS_Store
 .eunit
 deps
-priv
-*.o
+logs
+ebin
 *.beam
-*.plt
