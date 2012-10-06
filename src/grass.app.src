@@ -1,0 +1,13 @@
+{application, grass, [
+    {description, "Erlang GraphDB"},
+    {vsn, "0.1"},
+    {modules, []},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        lager
+    ]},
+    {mod, {grass, []}},
+    {env, []}
+]}.
