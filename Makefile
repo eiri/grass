@@ -22,8 +22,9 @@ clean:
 
 distclean: clean
 	${REBAR} delete-deps
-	rm -r ./logs
-	rm -r ./deps
+	rm -rf ${PWD}/logs
+	rm -rf ${PWD}/deps
+	rm -rf ${PWD}/*.db
 
 test:
 	${REBAR} compile eunit
