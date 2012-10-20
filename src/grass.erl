@@ -10,7 +10,7 @@
 -define(STORAGE, gs_leveldb_server).
 
 %% pub API
--export([start/0, stop/0, stats/0, bootstrap/0, all/0, get/1, put/2, delete/1]).
+-export([start/0, stop/0, stats/0, bootstrap/0, all/0, get/1, put/2, delete/1, drop/0, is_empty/0]).
 %% behaviours callbacks
 -export([start/2, stop/1, init/1]).
 
@@ -21,13 +21,24 @@ stats() ->
 
 bootstrap() ->
   Add = fun(A, B) ->
-    Key = list_to_binary(io_lib:format("~s~s", [A, B])),
-    Value = list_to_binary(io_lib:format("~s~s", [B, A])),
+    Key = <<A/binary, B/binary>>,
+    NA = neighbours(A),
+    NB = neighbours(B),
+    Neighbours = lists:usort(lists:append(NA, NB)),
+    Value = [{<<"all">>, Neighbours},{<<"first">>, NA}, {<<"second">>, NB}],
     gen_server:cast(?STORAGE, {put, Key, Value})
   end,
-  AZ = [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z],
+  AZ = [ atom_to_binary(A, latin1) || A <- [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z] ],
   [ Add(A, B) || A <- AZ, B <- AZ ].
 
+neighbours(Letter) ->
+  AZ = [ atom_to_binary(A, latin1) || A <- [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z] ],
+  List = lists:zip(AZ, lists:seq(1, length(AZ))),
+  case proplists:get_value(Letter, List) of
+    1 -> [lists:nth(26, AZ), lists:nth(2, AZ)];
+    26 -> [lists:nth(25, AZ), lists:nth(1, AZ)];
+    N -> [lists:nth(N - 1, AZ), lists:nth(N + 1, AZ)]
+  end.
 
 all() ->
   gen_server:call(?STORAGE, all).
@@ -41,6 +52,12 @@ put(Key, Value) ->
 
 delete(Key) ->
   gen_server:cast(?STORAGE, {delete, atom_to_binary(Key, latin1)}).
+
+is_empty() ->
+  gen_server:call(?STORAGE, is_empty).
+
+drop() ->
+  gen_server:cast(?STORAGE, drop).
 
 %% start/stop
 
