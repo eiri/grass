@@ -30,7 +30,7 @@ test:
 	${REBAR} compile eunit
 
 docs:
-	${REBAR} doc
+	${REBAR} doc skip_deps=true
 
 help:
 	@echo "Targets: run, compile, build, deps, clean, distclean, test and docs"
