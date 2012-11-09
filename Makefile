@@ -27,7 +27,7 @@ distclean: clean
 	rm -rf ${PWD}/*.db
 
 test:
-	${REBAR} compile eunit
+	${REBAR} compile eunit skip_deps=true
 
 docs:
 	${REBAR} doc skip_deps=true
