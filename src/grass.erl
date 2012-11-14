@@ -37,8 +37,8 @@
   drop/0,
   is_empty/0
 ]).
-%% stats & pick-inside functions
--export([all/0, stats/0]).
+%% stats, example & pick-inside functions
+-export([all/0, stats/0, example/1]).
 %% behaviours callbacks
 -export([start/0, stop/0, start/2, stop/1, init/1]).
 
@@ -124,9 +124,9 @@ edges() ->
   Edges = lists:foldl(fun
             ({<<"vertex/", V1/binary>>, Ins}, Acc) ->
               lists:foldl(fun(V2, A) ->
-                case lists:member(<<V2/binary, ?EDGE, V1/binary>>, A) of
+                case lists:member([V2, V1], A) of
                   true -> A;
-                  false -> [<<V1/binary, ?EDGE, V2/binary>>|A]
+                  false -> [[V1, V2]|A]
                 end
               end, Acc, Ins);
             (_, Acc) -> Acc
@@ -138,7 +138,7 @@ edges() ->
 edges(V) ->
   V1 = <<"vertex/", V/binary>>,
   case gget(V1) of
-    {ok, V1, Ins} -> [ <<V/binary, ?EDGE, V2/binary>> || V2 <- Ins];
+    {ok, V1, Ins} -> [ [V, V2] || V2 <- Ins];
     E -> E
   end.
 
@@ -213,6 +213,28 @@ all() ->
 
 stats() ->
   lager:info("~n~s", [gen_server:call(?GRAPH, stats)]).
+
+example(tiger) ->
+  example("tiger.txt");
+example(limeric) ->
+  example("limeric.txt");
+example(jabberwocky) ->
+  example("jabberwocky.txt");
+example(File) ->
+  DirBin = filename:dirname(code:which(?MODULE)),
+  {ok, Bin} = file:read_file(filename:join([DirBin,"..", "priv", File])),
+  Punct = [<<"\n">>, <<".">>, <<",">>, <<"?">>, <<"!">>, <<"\"">>, <<":">>, <<";">>, <<" ">>],
+  Parts = binary:split(Bin, Punct, [global, trim]),
+  Text = [ list_to_binary(xmerl_lib:to_lower(binary_to_list(W))) || W <- Parts, W /= <<>> ],
+  grass:drop(),
+  lists:foldl(fun
+    (W, first) -> grass:add_vertex(W), W;
+    (W, Prev) ->
+      grass:add_vertex(W),
+      grass:add_edge(Prev, W),
+      W
+  end, first, Text),
+  done.
 
 %% app/sup start/stop
 
@@ -326,8 +348,8 @@ test_edges() ->
     grass:edges()
   end,
   [
-    {"Small list of all edges", ?_assertEqual([<<"a -- b">>], grass:edges())},
-    {"Full list of all edges", ?_assertEqual([<<"a -- b">>, <<"a -- c">>, <<"b -- c">>, <<"c -- d">>], Edges())}
+    {"Small list of all edges", ?_assertEqual([[<<"a">>, <<"b">>]], grass:edges())},
+    {"Full list of all edges", ?_assertEqual([[<<"a">>, <<"b">>], [<<"a">>, <<"c">>], [<<"b">>, <<"c">>], [<<"c">>, <<"d">>]], Edges())}
   ].
 
 test_verticies_for_vertex() ->
@@ -340,10 +362,10 @@ test_verticies_for_vertex() ->
 
 test_edges_for_vertex() ->
   [
-    {"Got edges for 'a'", ?_assertEqual([<<"a -- b">>, <<"a -- c">>], grass:edges(<<"a">>))},
-    {"Got edges for 'b'", ?_assertEqual([<<"b -- a">>, <<"b -- c">>], grass:edges(<<"b">>))},
-    {"Got edges for 'c'", ?_assertEqual([<<"c -- a">>, <<"c -- b">>, <<"c -- d">>], grass:edges(<<"c">>))},
-    {"Got edges for 'd'", ?_assertEqual([<<"d -- c">>], grass:edges(<<"d">>))}
+    {"Got edges for 'a'", ?_assertEqual([[<<"a">>, <<"b">>], [<<"a">>, <<"c">>]], grass:edges(<<"a">>))},
+    {"Got edges for 'b'", ?_assertEqual([[<<"b">>, <<"a">>], [<<"b">>, <<"c">>]], grass:edges(<<"b">>))},
+    {"Got edges for 'c'", ?_assertEqual([[<<"c">>, <<"a">>], [<<"c">>, <<"b">>], [<<"c">>, <<"d">>]], grass:edges(<<"c">>))},
+    {"Got edges for 'd'", ?_assertEqual([[<<"d">>, <<"c">>]], grass:edges(<<"d">>))}
   ].
 
 test_edge_exists() ->
@@ -356,7 +378,7 @@ test_clone_vertex() ->
   [
     {"Clone vertex", ?_assertEqual(ok, grass:clone_vertex(<<"c">>, <<"e">>))},
     {"Correct connections in cloned", ?_assertEqual([<<"a">>, <<"b">>, <<"d">>], grass:verticies(<<"e">>))},
-    {"Correct edges in cloned", ?_assertEqual([<<"e -- a">>, <<"e -- b">>, <<"e -- d">>], grass:edges(<<"e">>))},
+    {"Correct edges in cloned", ?_assertEqual([[<<"e">>, <<"a">>], [<<"e">>, <<"b">>], [<<"e">>, <<"d">>]], grass:edges(<<"e">>))},
     {"'e' knows 'a'", ?_assert(grass:edge_exists(<<"e">>, <<"a">>))},
     {"'a' knows 'e'", ?_assert(grass:edge_exists(<<"a">>, <<"e">>))}
   ].
@@ -366,7 +388,7 @@ test_modify_vertex() ->
     {"Modify vertex", ?_assertEqual(ok, grass:modify_vertex(<<"e">>, <<"eh">>))},
     {"'e' no more", ?_assertNot(grass:vertex_exists(<<"e">>))},
     {"Correct connections in modified", ?_assertEqual([<<"a">>, <<"b">>, <<"d">>], grass:verticies(<<"eh">>))},
-    {"Correct edges in modified", ?_assertEqual([<<"eh -- a">>, <<"eh -- b">>, <<"eh -- d">>], grass:edges(<<"eh">>))},
+    {"Correct edges in modified", ?_assertEqual([[<<"eh">>, <<"a">>], [<<"eh">>, <<"b">>], [<<"eh">>, <<"d">>]], grass:edges(<<"eh">>))},
     {"'eh' knows 'a'", ?_assert(grass:edge_exists(<<"eh">>, <<"a">>))},
     {"'a' knows 'eh'", ?_assert(grass:edge_exists(<<"a">>, <<"eh">>))},
     {"'eh' knows 'b'", ?_assert(grass:edge_exists(<<"eh">>, <<"b">>))},
@@ -387,7 +409,7 @@ test_del_edge() ->
 test_del_vertex() ->
   [
     {"Delete vertex 'eh'", ?_assertEqual(ok, grass:del_vertex(<<"eh">>))},
-    {"All edges of 'eh' gone", ?_assertEqual([<<"a -- b">>, <<"a -- c">>, <<"b -- c">>, <<"c -- d">>], grass:edges())},
+    {"All edges of 'eh' gone", ?_assertEqual([[<<"a">>, <<"b">>], [<<"a">>, <<"c">>], [<<"b">>, <<"c">>], [<<"c">>, <<"d">>]], grass:edges())},
     {"All verticies preserved", ?_assertEqual([<<"a">>, <<"b">>, <<"c">>, <<"d">>], grass:verticies())}
   ].
 
