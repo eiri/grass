@@ -50,45 +50,37 @@
 %%  If the graph is empty, returns an empty list.
 -spec verticies() -> list().
 verticies() ->
-  Keys = gen_server:call(?GRAPH, {keys, <<"vertex">>}),
-  lists:foldl(fun
-    (<<"vertex/", V/binary>>, Acc) -> [V|Acc];
-    (_, Acc) -> Acc
-  end,
-  [], lists:reverse(Keys)).
+  gkeys().
 
 %% @doc Returns a list of the verticies connected to the vertex V.
 %%  If the vertex doesn't have the connections returns an empty list.
 -spec verticies(vertex()) -> list() | {error, error()}.
 verticies(V) ->
-  V1 = <<"vertex/", V/binary>>,
-  case gget(V1) of
-    {ok, V1, Ins} -> Ins;
+  case gget(V) of
+    {ok, V, Ins} -> Ins;
     E -> E
   end.
 
 %% @doc Checks is the vertex V exists.
 -spec vertex_exists(vertex()) -> boolean().
 vertex_exists(V) ->
-  gexists(<<"vertex/", V/binary>>).
+  gexists(V).
 
 %% @doc Creates a new vertex V
 -spec add_vertex(vertex()) -> ok | {error, error()}.
 add_vertex(V) ->
-  V1 = <<"vertex/", V/binary>>,
-  case gexists(V1) of
+  case gexists(V) of
     true -> {error, already_exists};
-    false -> gput(V1, [])
+    false -> gput(V, [])
   end.
 
 %% @doc Creates an exact copy of the vertex V1 with name V2.
 %%  Duplicates all the edges connecting to V1.
 -spec clone_vertex(vertex(), vertex()) -> ok | {error, error()}.
 clone_vertex(From, To) ->
-  V1 = <<"vertex/", From/binary>>,
-  case gget(V1) of
-    {ok, V1, Ins} ->
-      ok = gput(<<"vertex/", To/binary>>, []),
+  case gget(From) of
+    {ok, From, Ins} ->
+      ok = gput(To, []),
       [ ok = grass:add_edge(V, To) || V <- Ins ],
       ok;
     E -> E
@@ -104,15 +96,13 @@ modify_vertex(From, To) ->
 %% @doc Deletes the vertex V.
 -spec del_vertex(vertex()) -> ok | {error, error()}.
 del_vertex(V) ->
-  V1 = <<"vertex/", V/binary>>,
-  case gget(V1) of
-    {ok, V1, Ins} ->
-      lists:foreach(fun(RawV) ->
-        V2 = <<"vertex/", RawV/binary>>,
+  case gget(V) of
+    {ok, V, Ins} ->
+      lists:foreach(fun(V2) ->
         {ok, V2, Ins2} = gget(V2),
         ok = gput(V2, lists:delete(V, Ins2))
       end, Ins),
-      gdel(V1);
+      gdel(V);
     E -> E
   end.
 
@@ -120,36 +110,32 @@ del_vertex(V) ->
 %%  If the graph is empty, returns an empty list.
 -spec edges() -> list().
 edges() ->
-  All = gen_server:call(?GRAPH, {all, <<"vertex">>}),
+  All = gall(),
   Edges = lists:foldl(fun
-            ({<<"vertex/", V1/binary>>, Ins}, Acc) ->
+            ({V1, Ins}, Acc) ->
               lists:foldl(fun(V2, A) ->
                 case lists:member([V2, V1], A) of
                   true -> A;
                   false -> [[V1, V2]|A]
                 end
-              end, Acc, Ins);
-            (_, Acc) -> Acc
+              end, Acc, Ins)
           end, [], All),
   lists:reverse(Edges).
 
 %% @doc Returns a list of the edges connecting to the vertex V
 -spec edges(vertex()) -> list() | {error, error()}.
 edges(V) ->
-  V1 = <<"vertex/", V/binary>>,
-  case gget(V1) of
-    {ok, V1, Ins} -> [ [V, V2] || V2 <- Ins];
+  case gget(V) of
+    {ok, V, Ins} -> [ [V, V2] || V2 <- Ins];
     E -> E
   end.
 
-%% @doc Checks is the edge between verticies V1 and V2 exists.
+%% @doc Checks is the edge between verticies 'From' and 'To' exists.
 -spec edge_exists(vertex(), vertex()) -> boolean().
-edge_exists(V1, V2) ->
-  Vr1 = <<"vertex/", V1/binary>>,
-  Vr2 = <<"vertex/", V2/binary>>,
-  case {gget(Vr1), gget(Vr2)} of
-    {{ok, Vr1, Ins1}, {ok, Vr2, Ins2}} ->
-      lists:member(V2, Ins1) and lists:member(V1, Ins2);
+edge_exists(From, To) ->
+  case {gget(From), gget(To)} of
+    {{ok, From, Ins1}, {ok, To, Ins2}} ->
+      lists:member(To, Ins1) and lists:member(From, Ins2);
     _ -> false
   end.
 
@@ -157,26 +143,22 @@ edge_exists(V1, V2) ->
 %%  Returns 'ok' even if the edge already exists.
 -spec add_edge(vertex(), vertex()) -> ok | {error, error()}.
 add_edge(From, To) ->
-  From1 = <<"vertex/", From/binary>>,
-  To1 = <<"vertex/", To/binary>>,
-  case {gget(From1), gget(To1)} of
-    {{ok, From1, Ins1}, {ok, To1, Ins2}} ->
-      ok = gput(From1, lists:usort([To|Ins1])),
-      ok = gput(To1, lists:usort([From|Ins2]));
+  case {gget(From), gget(To)} of
+    {{ok, From, Ins1}, {ok, To, Ins2}} ->
+      ok = gput(From, lists:usort([To|Ins1])),
+      ok = gput(To, lists:usort([From|Ins2]));
     {E, {ok, _, _}} -> E;
     {_, E} -> E
   end.
 
-%% @doc Deletes edge between the verticies V1 and V2.
+%% @doc Deletes edge between the verticies 'From' and 'To'.
 %%  Returns 'ok' even if the edge doesn't exist.
 -spec del_edge(vertex(), vertex()) -> ok | {error, error()}.
 del_edge(From, To) ->
-  From1 = <<"vertex/", From/binary>>,
-  To1 = <<"vertex/", To/binary>>,
-  case {gget(From1), gget(To1)} of
-    {{ok, From1, Ins1}, {ok, To1, Ins2}} ->
-      ok = gput(From1, lists:delete(To, Ins1)),
-      ok = gput(To1, lists:delete(From, Ins2));
+  case {gget(From), gget(To)} of
+    {{ok, From, Ins1}, {ok, To, Ins2}} ->
+      ok = gput(From, lists:delete(To, Ins1)),
+      ok = gput(To, lists:delete(From, Ins2));
     {E, {ok, _, _}} -> E;
     {_, E} -> E
   end.
@@ -193,6 +175,18 @@ drop() ->
   gen_server:cast(?GRAPH, drop).
 
 %% Private
+
+gall() ->
+  gen_server:call(?GRAPH, all).
+
+gall(From) ->
+  gen_server:call(?GRAPH, {all, From}).
+
+gkeys() ->
+  gen_server:call(?GRAPH, keys).
+
+gkeys(From) ->
+  gen_server:call(?GRAPH, {keys, From}).
 
 gexists(K) ->
   gen_server:call(?GRAPH, {exists, K}).
