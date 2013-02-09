@@ -14,7 +14,7 @@
 
 -define(WORKER(M), {M, {M, start_link, []}, permanent, 2000, worker, [M]}).
 -define(WORKER(M, A), {M, {M, start_link, [A]}, permanent, 2000, worker, [M]}).
--define(GRAPH, gs_leveldb_server).
+-define(GRAPH, gs_graph_server).
 -define(EDGE, " -- ").
 
 -type vertex() :: binary().
@@ -250,15 +250,20 @@ stop(_State) ->
 
 init([]) ->
   {ok, Port} = application:get_env(port),
-  {ok, WorkDir} = application:get_env(work_dir),
-  MaxRestart = 3,
-  MaxWait = 3600,
-  RestartStrategy = {one_for_one, MaxRestart, MaxWait},
   %% in dispatcher '*' is atom, even when first argument is a string!
   WebConfig = [{ip, "0.0.0.0"}, {port, Port}, {dispatch, [{['*'], gs_web, []}]}],
   Web = {web, {webmachine_mochiweb, start, [WebConfig]}, permanent, 2000, worker, dynamic},
-  LevelDB = ?WORKER(gs_leveldb_server, [WorkDir]),
+  %% Split it to graph sup
+  {ok, DBDir} = application:get_env(work_dir),
+  BaseDir = filename:dirname(code:which(?MODULE)),
+  WorkDir = filename:join([BaseDir, "..", DBDir]),
+  file:make_dir(WorkDir),
+  LevelDB = ?WORKER(gs_graph_server, [WorkDir]),
   Children = [Web, LevelDB],
+  % strategy
+  MaxRestart = 3,
+  MaxWait = 3600,
+  RestartStrategy = {one_for_one, MaxRestart, MaxWait},
   {ok, {RestartStrategy, Children}}.
 
 %%
@@ -268,7 +273,7 @@ init([]) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-verticies_test_() ->
+grass_test_() ->
   {setup,
     fun test_setup/0,
     fun test_teardown/1,
@@ -296,13 +301,13 @@ test_setup() ->
   WorkDir = string:strip(WD, right, $\n),
 %%  os:cmd(io_lib:format("rm -rf ~p", [WorkDir])),
   ?debugFmt("Work Dir: ~p~n", [WorkDir]),
-  {ok, Ref} = gs_leveldb_server:start_link([WorkDir]),
+  {ok, Ref} = gs_graph_server:start_link([WorkDir]),
   [{dir, WorkDir}, {ref, Ref}].
 
 test_teardown(TestData) ->
   WorkDir = proplists:get_value(dir, TestData),
   Ref = proplists:get_value(ref, TestData),
-  gs_leveldb_server:stop(Ref),
+  gs_graph_server:stop(Ref),
   os:cmd(io_lib:format("rm -rf ~p", [WorkDir])).
 
 test_add_vertex() ->

@@ -1,4 +1,4 @@
--module(gs_leveldb_server).
+-module(gs_graph_server).
 
 -behaviour(gen_server).
 
@@ -14,10 +14,11 @@ stop(Ref) ->
   gen_server:call(Ref, stop).
 
 init([WorkDir]) ->
+  GraphDir = filename:join([WorkDir, "verticies"]),
   Opts = [{create_if_missing, true}, {compression, true}, {verify_compactions, true}],
-  case eleveldb:open(WorkDir, Opts) of
+  case eleveldb:open(GraphDir, Opts) of
     {ok, Ref} ->
-      {ok, #ctx{ref = Ref, dir = WorkDir, opts = Opts}};
+      {ok, #ctx{ref = Ref, dir = GraphDir, opts = Opts}};
     {error, Reason} ->
       {error, Reason}
   end.
