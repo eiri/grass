@@ -103,6 +103,16 @@ false
 [<<"a">>,<<"b">>,<<"c">>,<<"d">>]
 (grass@StarFortress)18> grass:edges().
 [[<<"a">>, <<"b">>], [<<"a">>, <<"c">>], [<<"b">>, <<"c">>], [<<"c">>, <<"d">>]]
+(grass@StarFortress)19> grass:add_vertex(<<"e">>).
+ok
+(grass@StarFortress)20> grass:add_vertex(<<"f">>).
+ok
+(grass@StarFortress)21> grass:add_edge(<<"b">>, <<"e">>), grass:add_edge(<<"e">>, <<"f">>), grass:add_edge(<<"c">>, <<"f">>).
+ok
+(grass@StarFortress)22> grass_utils:find_path(<<"a">>, <<"f">>).
+[<<"a">>,<<"b">>,<<"c">>,<<"f">>]
+(grass@StarFortress)23> grass_utils:find_short_path(<<"a">>, <<"f">>).
+[<<"a">>,<<"c">>,<<"f">>]
 ```
 
 ## Complete API
@@ -130,9 +140,9 @@ $ make test
 module 'grass'
   grass:278: test_add_vertex (Add vertex)...ok
   ...
-  [done in 0.150 s]
+  [done in 0.130 s]
 =======================================================
-  All 45 tests passed.
+  All 55 tests passed.
 ```
 
 ## License
