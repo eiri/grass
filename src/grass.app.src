@@ -1,12 +1,23 @@
 {application, grass, [
     {description, "Erlang GraphDB"},
     {vsn, "0.1"},
-    {modules, []},
-    {registered, []},
+    {modules, [
+        grass,
+        grass_utils,
+        gs_graph_sup,
+        gs_graph_server,
+        gs_register_server,
+        gs_web
+    ]},
+    {registered, [grass, gs_graph_sup]},
     {applications, [
         kernel,
         stdlib,
-        lager
+        lager,
+        crypto,
+        inets,
+        mochiweb,
+        webmachine
     ]},
     {mod, {grass, []}},
     {env, []}

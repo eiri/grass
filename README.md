@@ -39,8 +39,6 @@ $ make run
 
 There are built-in function `grass:example(Key)` created for demonstration proposes. It creates a graph out of one of the three poems, where each word made to vertex and edged to immidiate neighbours. Available values for `Key`: `limeric`, `tiger` or `jabberwocky`.
 
-**Be aware, that the function drops an existing graph on a call!**
-
 ### How to run
 
 _Note: To draw the graph [GraphViz](http://www.graphviz.org/Documentation.php) need to be installed._<br />
@@ -57,7 +55,7 @@ done
 In next terminal ( _grass' node needs to be up_ )
 
 ```bash
-$ curl http://localhost:9922 | dot -Tpng -o limeric.png
+$ curl http://localhost:9922?graph=limeric | dot -Tpng -o limeric.png
 $ open limeric.png
 ```
 
@@ -66,53 +64,91 @@ You should get something like:<br />
 
 ## General usage
 
+Create and populate a graph
+
 ```erlang
-(grass@StarFortress)1> grass:drop().
-ok
-(grass@StarFortress)2> grass:verticies().
+(grass@StarFortress)> grass:graphs().
 []
-(grass@StarFortress)3> grass:edges().
+(grass@StarFortress)> grass:create(<<"G">>).
+21:48:05.115 [debug] Supervisor gs_graph_sup started gs_graph_server:start_link([{<<"G">>,"/Users/eiri/...
+ok
+(grass@StarFortress)> grass:verticies(<<"G">>).
 []
-(grass@StarFortress)4> grass:add_vertex(<<"a">>).
+(grass@StarFortress)> grass:edges(<<"G">>).
+[]
+(grass@StarFortress)> grass:add_vertex(<<"G">>, <<"a">>).
 ok
-(grass@StarFortress)5> grass:add_vertex(<<"b">>).
+(grass@StarFortress)> grass:add_vertex(<<"G">>, <<"b">>).
 ok
-(grass@StarFortress)6> grass:add_vertex(<<"c">>).
+(grass@StarFortress)> grass:add_vertex(<<"G">>, <<"c">>).
 ok
-(grass@StarFortress)7> grass:add_vertex(<<"d">>).
+(grass@StarFortress)> grass:add_vertex(<<"G">>, <<"d">>).
 ok
-(grass@StarFortress)8> grass:add_edge(<<"a">>, <<"b">>).
+(grass@StarFortress)> grass:add_edge(<<"G">>, <<"a">>, <<"b">>).
 ok
-(grass@StarFortress)9> grass:add_edge(<<"a">>, <<"c">>).
+(grass@StarFortress)> grass:add_edge(<<"G">>, <<"a">>, <<"c">>).
 ok
-(grass@StarFortress)10> grass:add_edge(<<"b">>, <<"c">>).
+(grass@StarFortress)> grass:add_edge(<<"G">>, <<"b">>, <<"c">>).
 ok
-(grass@StarFortress)11> grass:add_edge(<<"c">>, <<"d">>).
+(grass@StarFortress)> grass:add_edge(<<"G">>, <<"c">>, <<"d">>).
 ok
-(grass@StarFortress)12> grass:vertex_exists(<<"a">>).
+(grass@StarFortress)> grass:vertex_exists(<<"G">>, <<"a">>).
 true
-(grass@StarFortress)13> grass:vertex_exists(<<"z">>).
+(grass@StarFortress)> grass:vertex_exists(<<"G">>, <<"z">>).
 false
-(grass@StarFortress)14> grass:edge_exists(<<"a">>).
+(grass@StarFortress)> grass:edge_exists(<<"G">>, <<"a">>, <<"c">>).
 true
-(grass@StarFortress)15> grass:edge_exists(<<"a">>, <<"b">>).
+(grass@StarFortress)> grass:edge_exists(<<"G">>, <<"a">>, <<"b">>).
 true
-(grass@StarFortress)16> grass:edge_exists(<<"a">>, <<"d">>).
+(grass@StarFortress)> grass:edge_exists(<<"G">>, <<"a">>, <<"d">>).
 false
-(grass@StarFortress)17> grass:verticies().
+(grass@StarFortress)> grass:verticies(<<"G">>).
 [<<"a">>,<<"b">>,<<"c">>,<<"d">>]
-(grass@StarFortress)18> grass:edges().
-[[<<"a">>, <<"b">>], [<<"a">>, <<"c">>], [<<"b">>, <<"c">>], [<<"c">>, <<"d">>]]
-(grass@StarFortress)19> grass:add_vertex(<<"e">>).
+(grass@StarFortress)> grass:edges(<<"G">>).
+[[<<"a">>, <<"b">>],
+ [<<"a">>, <<"c">>],
+ [<<"b">>, <<"c">>],
+ [<<"c">>, <<"d">>]]
+(grass@StarFortress)> grass:add_vertex(<<"G">>, <<"e">>).
 ok
-(grass@StarFortress)20> grass:add_vertex(<<"f">>).
+(grass@StarFortress)> grass:add_vertex(<<"G">>, <<"f">>).
 ok
-(grass@StarFortress)21> grass:add_edge(<<"b">>, <<"e">>), grass:add_edge(<<"e">>, <<"f">>), grass:add_edge(<<"c">>, <<"f">>).
+(grass@StarFortress)> grass:add_edge(<<"G">>, <<"b">>, <<"e">>), grass:add_edge(<<"G">>, <<"e">>, <<"f">>), grass:add_edge(<<"G">>, <<"c">>, <<"f">>).
 ok
-(grass@StarFortress)22> grass_utils:find_path(<<"a">>, <<"f">>).
+(grass@StarFortress)> grass_utils:find_path(<<"G">>, <<"a">>, <<"f">>).
 [<<"a">>,<<"b">>,<<"c">>,<<"f">>]
-(grass@StarFortress)23> grass_utils:find_short_path(<<"a">>, <<"f">>).
+(grass@StarFortress)> grass_utils:find_short_path(<<"G">>, <<"a">>, <<"f">>).
 [<<"a">>,<<"c">>,<<"f">>]
+```
+
+Web interface
+
+```bash
+$ curl http://localhost:9922?graph=G
+graph G {
+  "a" -- "b";
+  "a" -- "c";
+  "b" -- "c";
+  "b" -- "e";
+  "c" -- "d";
+  "c" -- "f";
+  "e" -- "f";
+}
+```
+
+Clean up
+
+```erlang
+(grass@StarFortress)> grass:drop(<<"G">>).
+ok
+(grass@StarFortress)> grass:verticies(<<"G">>).
+[]
+(grass@StarFortress)> grass:graphs().
+[<<"G">>]
+(grass@StarFortress)> grass:destroy(<<"G">>).
+ok
+(grass@StarFortress)> grass:graphs().
+[]
 ```
 
 ## Complete API
@@ -140,7 +176,7 @@ $ make test
 module 'grass'
   grass:278: test_add_vertex (Add vertex)...ok
   ...
-  [done in 0.130 s]
+  [done in 0.146 s]
 =======================================================
   All 55 tests passed.
 ```

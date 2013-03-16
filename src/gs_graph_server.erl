@@ -5,20 +5,21 @@
 -export([start_link/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(ctx, {ref, dir, opts}).
+-record(ctx, {ref, name, dir, opts}).
 
 start_link(Args) ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
+  gen_server:start_link(?MODULE, Args, []).
 
 stop(Ref) ->
   gen_server:call(Ref, stop).
 
-init([WorkDir]) ->
-  GraphDir = filename:join([WorkDir, "verticies"]),
+init([{Name, WorkDir}]) ->
+  GraphDir = filename:join(WorkDir, "verticies"),
   Opts = [{create_if_missing, true}, {compression, true}, {verify_compactions, true}],
   case eleveldb:open(GraphDir, Opts) of
     {ok, Ref} ->
-      {ok, #ctx{ref = Ref, dir = GraphDir, opts = Opts}};
+      gs_register_server:set(Name, self()),
+      {ok, #ctx{name = Name, ref = Ref, dir = GraphDir, opts = Opts}};
     {error, Reason} ->
       {error, Reason}
   end.
@@ -64,7 +65,16 @@ handle_call(stats, _From, #ctx{ref = Ref} = Ctx) ->
   {reply, Stats, Ctx};
 handle_call(is_empty, _From, #ctx{ref = Ref} = Ctx) ->
   {reply, eleveldb:is_empty(Ref), Ctx};
-handle_call(stop, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call(drop, _From, #ctx{ref = Ref, dir = Dir, opts = Opts} = Ctx) ->
+  eleveldb:close(Ref),
+  ok = eleveldb:destroy(Dir, []),
+  {ok, NewRef} = eleveldb:open(Dir, Opts),
+  {reply, ok, Ctx#ctx{ref = NewRef}};
+handle_call(destroy, _From, #ctx{ref = Ref, dir = Dir} = Ctx) ->
+  eleveldb:close(Ref),
+  Reply = eleveldb:destroy(Dir, []),
+  {reply, Reply, Ctx#ctx{ref = undefined}};
+handle_call(stop, _From, Ctx) ->
   {stop, normal, ok, Ctx}.
 
 handle_cast({put, Key, Value}, #ctx{ref = Ref} = Ctx) ->
@@ -72,18 +82,17 @@ handle_cast({put, Key, Value}, #ctx{ref = Ref} = Ctx) ->
   {noreply, Ctx};
 handle_cast({delete, Key}, #ctx{ref = Ref} = Ctx) ->
   ok = eleveldb:delete(Ref, Key, []),
-  {noreply, Ctx};
-handle_cast(drop, #ctx{ref = Ref, dir = Dir, opts = Opts} = Ctx) ->
-  eleveldb:close(Ref),
-  ok = eleveldb:destroy(Dir, []),
-  {ok, NewRef} = eleveldb:open(Dir, Opts),
-  {noreply, Ctx#ctx{ref = NewRef}}.
-
-handle_info(Msg, Ctx) ->
   {noreply, Ctx}.
 
-terminate(_Reason, #ctx{ref = Ref}) ->
+handle_info(_Msg, Ctx) ->
+  {noreply, Ctx}.
+
+terminate(_Reason, #ctx{name = Name, ref = undefined}) ->
+  gs_register_server:del(Name),
+  ok;
+terminate(_Reason, #ctx{name = Name, ref = Ref}) ->
   eleveldb:close(Ref),
+  gs_register_server:del(Name),
   ok.
 
 code_change(_OldVsn, Ctx, _Extra) ->
