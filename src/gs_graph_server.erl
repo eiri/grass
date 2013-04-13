@@ -5,7 +5,7 @@
 -export([start_link/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(ctx, {ref, name, dir, opts}).
+-record(ctx, {ref, tref, name, dir, opts}).
 
 start_link(Args) ->
   gen_server:start_link(?MODULE, Args, []).
@@ -18,8 +18,10 @@ init([{Name, WorkDir}]) ->
   Opts = [{create_if_missing, true}, {compression, true}, {verify_compactions, true}],
   case eleveldb:open(GraphDir, Opts) of
     {ok, Ref} ->
+      TagDir = filename:join(WorkDir, "tags"),
+      {ok, TRef} = eleveldb:open(TagDir, Opts), 
       gs_register_server:set(Name, self()),
-      {ok, #ctx{name = Name, ref = Ref, dir = GraphDir, opts = Opts}};
+      {ok, #ctx{name = Name, ref = Ref, tref = TRef, dir = WorkDir, opts = Opts}};
     {error, Reason} ->
       {error, Reason}
   end.
@@ -60,20 +62,30 @@ handle_call({get, Key}, _From, #ctx{ref = Ref} = Ctx) ->
       {ok, Value} = msgpack:unpack(MPValue, [jsx]),
       {reply, {ok, Key, Value}, Ctx}
   end;
-handle_call(stats, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call(stats, _From, #ctx{ref = Ref, tref = TRef} = Ctx) ->
   {ok, Stats} = eleveldb:status(Ref, <<"leveldb.stats">>),
-  {reply, Stats, Ctx};
+  {ok, TStats} = eleveldb:status(TRef, <<"leveldb.stats">>),
+  {reply, [{verticies, Stats}, {tags, TStats}], Ctx};
 handle_call(is_empty, _From, #ctx{ref = Ref} = Ctx) ->
   {reply, eleveldb:is_empty(Ref), Ctx};
-handle_call(drop, _From, #ctx{ref = Ref, dir = Dir, opts = Opts} = Ctx) ->
+handle_call(drop, _From, #ctx{ref = Ref, tref = TRef, dir = Dir, opts = Opts} = Ctx) ->
+  eleveldb:close(TRef),
+  TagDir = filename:join(Dir, "tags"),
+  ok = eleveldb:destroy(TagDir, []),
   eleveldb:close(Ref),
-  ok = eleveldb:destroy(Dir, []),
-  {ok, NewRef} = eleveldb:open(Dir, Opts),
-  {reply, ok, Ctx#ctx{ref = NewRef}};
-handle_call(destroy, _From, #ctx{ref = Ref, dir = Dir} = Ctx) ->
+  GraphDir = filename:join(Dir, "verticies"),
+  ok = eleveldb:destroy(GraphDir, []),
+  {ok, NewRef} = eleveldb:open(GraphDir, Opts),
+  {ok, NewTRef} = eleveldb:open(TagDir, Opts),
+  {reply, ok, Ctx#ctx{ref = NewRef, tref = NewTRef}};
+handle_call(destroy, _From, #ctx{ref = Ref, tref = TRef, dir = Dir} = Ctx) ->
+  eleveldb:close(TRef),
+  TagDir = filename:join(Dir, "tags"),
+  ok = eleveldb:destroy(TagDir, []),
   eleveldb:close(Ref),
-  Reply = eleveldb:destroy(Dir, []),
-  {reply, Reply, Ctx#ctx{ref = undefined}};
+  GraphDir = filename:join(Dir, "verticies"),
+  Reply = eleveldb:destroy(GraphDir, []),
+  {reply, Reply, Ctx#ctx{ref = undefined, tref= undefined}};
 handle_call(stop, _From, Ctx) ->
   {stop, normal, ok, Ctx}.
 

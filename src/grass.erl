@@ -289,7 +289,10 @@ stats(G) when is_binary(G) ->
     E -> E
   end;
 stats(G) ->
-  lager:info("~n~s", [gen_server:call(G, stats)]).
+  Stats = gen_server:call(G, stats),
+  VStats = proplists:get_value(verticies, Stats),
+  TStats = proplists:get_value(tags, Stats),
+  lager:info("~n-= Verticies =-~n~s~n-= Attributes =-~n~s", [VStats, TStats]).
 
 example(tiger) ->
   example(<<"tiger">>, "tiger.txt");
