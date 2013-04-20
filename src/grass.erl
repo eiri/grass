@@ -18,6 +18,9 @@
 
 -type graph() :: binary() | pid().
 -type vertex() :: binary().
+-type key() :: binary().
+-type value() :: term().
+-type tag() :: {key(), value()}.
 -type error() :: not_found | already_exists | {eleveldb, binary()}.
 
 %% pub API
@@ -36,12 +39,16 @@
   edge_exists/3,
   add_edge/3,
   del_edge/3,
+  tags/2,
+  tags/3,
+  add_tag/4,
+  del_tag/3,
   drop/1,
   destroy/1,
   is_empty/1
 ]).
 %% stats, example & pick-inside functions
--export([all/1, stats/1, example/1]).
+-export([stats/1, example/1]).
 %% behaviours callbacks
 -export([start/0, stop/0, start/2, stop/1, init/1]).
 
@@ -186,6 +193,53 @@ del_edge(G, From, To) ->
     {_, E} -> E
   end.
 
+%% @doc Gets all the attributes that belong to a given vertex V in graph G.
+-spec tags(graph(), vertex()) -> [tag(),...] | [] | {error, error()}.
+tags(G, V) ->
+  case gall(G, tags, V) of
+    {error, E} -> {error, E};
+    All ->
+      Fold = fun({PfxKey, Val}, Acc) ->
+        case binary:split(PfxKey, <<"/">>) of
+          [V, Key] -> [{Key, Val}] ++ Acc;
+          _ -> Acc
+        end
+      end,
+      lists:reverse(lists:foldl(Fold, [], All))
+  end.
+
+%% @doc Gets the value of the attribute K in vertex V of graph G
+%%  Return undefined if there is no such attribute.
+-spec tags(graph(), vertex(), key()) -> {key(), value()} | undefined | {error, error()}.
+tags(G, V, Key) ->
+  case gexists(G, V) of
+    false -> {error, not_found};
+    true ->
+      PfxKey = <<V/binary, "/", Key/binary>>,
+      case gget(G, tags, PfxKey) of
+        {ok, PfxKey, Val} -> {Key, Val};
+        Err -> Err
+      end
+  end.
+
+%% @doc Adds the attribute to a vertex V in graph G.
+%%  If the attribute already exists, updates it.
+-spec add_tag(graph(), vertex(), key(), value()) -> ok | {error, error()}.
+add_tag(G, V, Key, Val) ->
+  case gexists(G, V) of
+    false -> {error, not_found};
+    true ->
+      PfxKey = <<V/binary, "/", Key/binary>>,
+      gput(G, tags, PfxKey, Val)
+  end.
+
+%% @doc Removes the attribute with key K from vertex V in graph G.
+%%  If the attribute doesn't exists just returns ok.
+-spec del_tag(graph(), vertex(), key()) -> ok | {error, error()}.
+del_tag(G, V, Key) ->
+  PfxKey = <<V/binary, "/", Key/binary>>,
+  gdel(G, tags, PfxKey).
+
 %% @doc Checks if the graph G have any verticies.
 -spec is_empty(graph()) -> boolean().
 is_empty(G) when is_binary(G) ->
@@ -208,80 +262,81 @@ drop(G) ->
   gen_server:call(G, drop).
 
 %% Private
-
-gall(G) when is_binary(G) ->
-  case gs_register_server:get(G) of
-    {ok, Pid} -> gall(Pid);
-    E -> E
-  end;
 gall(G) ->
-  gen_server:call(G, all).
+  gall(G, verticies).
 
-gall(G, From) when is_binary(G) ->
+gall(G, DB) when is_binary(G) ->
   case gs_register_server:get(G) of
-    {ok, Pid} -> gall(Pid, From);
+    {ok, Pid} -> gall(Pid, DB);
     E -> E
   end;
-gall(G, From) ->
-  gen_server:call(G, {all, From}).
+gall(G, DB) ->
+  gen_server:call(G, {all, DB}).
 
-gkeys(G) when is_binary(G) ->
+gall(G, DB, From) when is_binary(G) ->
   case gs_register_server:get(G) of
-    {ok, Pid} -> gkeys(Pid);
+    {ok, Pid} -> gall(Pid, DB, From);
     E -> E
   end;
+gall(G, DB, From) ->
+  gen_server:call(G, {all, DB, From}).
+
 gkeys(G) ->
-  gen_server:call(G, keys).
+  gkeys(G, verticies).
 
-gkeys(G, From) when is_binary(G) ->
+gkeys(G, DB) when is_binary(G) ->
   case gs_register_server:get(G) of
-    {ok, Pid} -> gkeys(Pid, From);
+    {ok, Pid} -> gkeys(Pid, DB);
     E -> E
   end;
-gkeys(G, From) ->
-  gen_server:call(G, {keys, From}).
+gkeys(G, DB) ->
+  gen_server:call(G, {keys, DB}).
 
-gexists(G, K) when is_binary(G) ->
-  case gs_register_server:get(G) of
-    {ok, Pid} -> gexists(Pid, K);
-    E -> E
-  end;
 gexists(G, K) ->
-  gen_server:call(G, {exists, K}).
+  gexists(G, verticies, K).
 
-gput(G, K, V) when is_binary(G) ->
+gexists(G, DB, K) when is_binary(G) ->
   case gs_register_server:get(G) of
-    {ok, Pid} -> gput(Pid, K, V);
+    {ok, Pid} -> gexists(Pid, DB, K);
     E -> E
   end;
+gexists(G, DB, K) ->
+  gen_server:call(G, {exists, DB, K}).
+
 gput(G, K, V) ->
-  gen_server:cast(G, {put, K, V}).
+  gput(G, verticies, K, V).
 
-gget(G, K) when is_binary(G) ->
+gput(G, DB, K, V) when is_binary(G) ->
   case gs_register_server:get(G) of
-    {ok, Pid} -> gget(Pid, K);
+    {ok, Pid} -> gput(Pid, DB, K, V);
     E -> E
   end;
+gput(G, DB, K, V) ->
+  gen_server:cast(G, {put, DB, K, V}).
+
 gget(G, K) ->
-  gen_server:call(G, {get, K}).
+  gget(G, verticies, K).
 
-gdel(G, K) when is_binary(G) ->
+gget(G, DB, K) when is_binary(G) ->
   case gs_register_server:get(G) of
-    {ok, Pid} -> gdel(Pid, K);
+    {ok, Pid} -> gget(Pid, DB, K);
     E -> E
   end;
+gget(G, DB, K) ->
+  gen_server:call(G, {get, DB, K}).
+
 gdel(G, K) ->
-  gen_server:cast(G, {delete, K}).
+  gdel(G, verticies, K).
+
+gdel(G, DB, K) when is_binary(G) ->
+  case gs_register_server:get(G) of
+    {ok, Pid} -> gdel(Pid, DB, K);
+    E -> E
+  end;
+gdel(G, DB, K) ->
+  gen_server:cast(G, {delete, DB, K}).
 
 %% Move to public API with multigraph
-
-all(G) when is_binary(G) ->
-  case gs_register_server:get(G) of
-    {ok, Pid} -> grass:all(Pid);
-    E -> E
-  end;
-all(G) ->
-  gen_server:call(G, all).
 
 stats(G) when is_binary(G) ->
   case gs_register_server:get(G) of
@@ -371,6 +426,7 @@ grass_test_() ->
         test_add_vertex(Pid),
         test_vertex_exists(Pid),
         test_verticies(Pid),
+        test_tags(Pid),
         test_add_edge(Pid),
         test_edges(Pid),
         test_verticies_for_vertex(Pid),
@@ -419,6 +475,19 @@ test_verticies(G) ->
   end,
   [
     {"List of all verticies", ?_assertEqual([<<"a">>, <<"b">>, <<"c">>], All())}
+  ].
+
+test_tags(G) ->
+  [
+    {"Empty list of tags", ?_assertEqual([], grass:tags(G, <<"b">>))},
+    {"Can add tag", ?_assertEqual(ok, grass:add_tag(G, <<"b">>, <<"color">>, <<"red">>))},
+    {"Can add another tag", ?_assertEqual(ok, grass:add_tag(G, <<"b">>, <<"mood">>, <<"blue">>))},
+    {"Can add tag to different vertex", ?_assertEqual(ok, grass:add_tag(G, <<"c">>, <<"color">>, <<"green">>))},
+    {"Can get all tags", ?_assertEqual([{<<"color">>, <<"red">>}, {<<"mood">>, <<"blue">>}], grass:tags(G, <<"b">>))},
+    {"Can get one tag", ?_assertEqual({<<"color">>, <<"red">>}, grass:tags(G, <<"b">>, <<"color">>))},
+    {"Can delete tag", ?_assertEqual(ok, grass:del_tag(G, <<"b">>, <<"color">>))},
+    {"Proper tag deleted", ?_assertEqual([{<<"mood">>, <<"blue">>}], grass:tags(G, <<"b">>))},
+    {"No tag on other vertex affected", ?_assertEqual([{<<"color">>, <<"green">>}], grass:tags(G, <<"c">>))}
   ].
 
 test_add_edge(G) ->

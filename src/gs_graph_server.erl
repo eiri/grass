@@ -26,35 +26,59 @@ init([{Name, WorkDir}]) ->
       {error, Reason}
   end.
 
-handle_call(all, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call({all, DB}, _From, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   Fun = fun({K, MSV}, Acc) ->
     {ok, V} = msgpack:unpack(MSV, [jsx]),
     [{K, V}] ++ Acc
   end,
   All = eleveldb:fold(Ref, Fun, [], []),
   {reply, lists:reverse(All), Ctx};
-handle_call({all, StartFrom}, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call({all, DB, StartFrom}, _From, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   Fun = fun({K, MSV}, Acc) ->
     {ok, V} = msgpack:unpack(MSV, [jsx]),
     [{K, V}] ++ Acc
   end,
   All = eleveldb:fold(Ref, Fun, [], [{first_key, StartFrom}]),
   {reply, lists:reverse(All), Ctx};
-handle_call(keys, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call({keys, DB}, _From, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   AccFun = fun(K, A) -> [K|A] end,
   All = eleveldb:fold_keys(Ref, AccFun, [], []),
   {reply, lists:reverse(All), Ctx};
-handle_call({keys, StartFrom}, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call({keys, DB, StartFrom}, _From, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   AccFun = fun(K, A) -> [K|A] end,
   All = eleveldb:fold_keys(Ref, AccFun, [], [{first_key, StartFrom}]),
   {reply, lists:reverse(All), Ctx};
-handle_call({exists, Key}, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call({exists, DB, Key}, _From, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   case eleveldb:get(Ref, Key, []) of
       not_found -> {reply, false, Ctx};
       {error, Error} -> {reply, {error, {eleveldb, Error}}, Ctx};
       {ok, _} -> {reply, true, Ctx}
   end;
-handle_call({get, Key}, _From, #ctx{ref = Ref} = Ctx) ->
+handle_call({get, DB, Key}, _From, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   case eleveldb:get(Ref, Key, []) of
     not_found -> {reply, {error, not_found}, Ctx};
     {error, Error} -> {reply, {error, {eleveldb, Error}}, Ctx};
@@ -89,10 +113,18 @@ handle_call(destroy, _From, #ctx{ref = Ref, tref = TRef, dir = Dir} = Ctx) ->
 handle_call(stop, _From, Ctx) ->
   {stop, normal, ok, Ctx}.
 
-handle_cast({put, Key, Value}, #ctx{ref = Ref} = Ctx) ->
+handle_cast({put, DB, Key, Value}, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   ok = eleveldb:put(Ref, Key, msgpack:pack(Value, [jsx]), []),
   {noreply, Ctx};
-handle_cast({delete, Key}, #ctx{ref = Ref} = Ctx) ->
+handle_cast({delete, DB, Key}, Ctx) ->
+  Ref = case DB of
+    tags -> Ctx#ctx.tref;
+    _ -> Ctx#ctx.ref
+  end,
   ok = eleveldb:delete(Ref, Key, []),
   {noreply, Ctx}.
 
