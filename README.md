@@ -60,7 +60,7 @@ $ open limeric.png
 ```
 
 You should get something like:<br />
-![Limeric Graph](https://raw.github.com/eiri/grass/master/priv/limeric.png")
+![Limeric Graph](https://raw.github.com/eiri/grass/master/priv/limeric.png)
 
 ## General usage
 
