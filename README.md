@@ -11,9 +11,9 @@ I am interested in studing of graph theory, so writing a toy graph database seem
 
 ## Notes and ToDo
 
-Currently (ver 0.1) Grass supports only one undirected unannotated graph and provides read-only web interface for graph's representation in [DOT langage](http://www.graphviz.org/content/dot-language)
+Currently (ver 0.2) Grass supports multiple undirected annotated graphs and provides read-only web interface for graphs' representation in [DOT langage](http://www.graphviz.org/content/dot-language)
 
-On the roadmap support for graphs' annotation, support for directed graphs, complete REST interface and complaiance with Tinkerpop stack.
+On the roadmap: support for graphs' nodes annotation, support for directed graphs, complete REST interface and complaiance with Tinkerpop stack.
 
 ## Installation
 
@@ -37,7 +37,7 @@ $ make run
 
 ## Quick example
 
-There are built-in function `grass:example(Key)` created for demonstration proposes. It creates a graph out of one of the three poems, where each word made to vertex and edged to immidiate neighbours. Available values for `Key`: `limeric`, `tiger` or `jabberwocky`.
+There are built-in function `grass:example(Key)` created for demonstration proposes. It creates a graph out of one of the three poems, where each word made to a vertex and edged to the immidiate neighbours. Available values for `Key`: `limeric`, `tiger` or `jabberwocky`.
 
 ### How to run
 
@@ -60,7 +60,7 @@ $ open limeric.png
 ```
 
 You should get something like:<br />
-![Limeric Graph](https://github.com/eiri/grass/blob/priv/limeric.png")
+![Limeric Graph](https://raw.github.com/eiri/grass/master/priv/limeric.png")
 
 ## General usage
 
@@ -102,6 +102,14 @@ true
 true
 (grass@StarFortress)> grass:edge_exists(<<"G">>, <<"a">>, <<"d">>).
 false
+(grass@StarFortress)> grass:tags(<<"G">>, <<"a">>).
+[]
+(grass@StarFortress)> grass:add_tag(<<"G">>, <<"a">>, <<"sound">>, <<"vowel">>).
+ok.
+(grass@StarFortress)> grass:add_tag(<<"G">>, <<"a">>, <<"order">>, 1).
+ok.
+(grass@StarFortress)> grass:tags(<<"G">>, <<"a">>).
+[{<<"order">>,1},{<<"sound">>,<<"vowel">>}]
 (grass@StarFortress)> grass:verticies(<<"G">>).
 [<<"a">>,<<"b">>,<<"c">>,<<"d">>]
 (grass@StarFortress)> grass:edges(<<"G">>).
@@ -126,6 +134,13 @@ Web interface
 ```bash
 $ curl http://localhost:9922?graph=G
 graph G {
+  node [ shape = polygon, sides = 4, fontname = "Helvetica-Outline" ];
+  "a" [order=1, sound="vowel"];
+  "b" [];
+  "c" [];
+  "d" [];
+  "e" [];
+  "f" [];
   "a" -- "b";
   "a" -- "c";
   "b" -- "c";
@@ -176,9 +191,9 @@ $ make test
 module 'grass'
   grass:278: test_add_vertex (Add vertex)...ok
   ...
-  [done in 0.146 s]
+  [done in 0.189 s]
 =======================================================
-  All 55 tests passed.
+  All 64 tests passed.
 ```
 
 ## License

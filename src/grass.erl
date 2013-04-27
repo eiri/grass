@@ -359,6 +359,12 @@ example(jabberwocky) ->
 example(G, File) ->
   DirBin = filename:dirname(code:which(?MODULE)),
   {ok, Bin} = file:read_file(filename:join([DirBin,"..", "priv", File])),
+  Color = fun(<<F,_/binary>>) ->
+    case lists:member(F, [97, 101, 105, 111, 117]) of
+      true -> <<"red">>;
+      false -> <<"green">>
+    end
+  end,
   Punct = [<<"\n">>, <<".">>, <<",">>, <<"?">>, <<"!">>, <<"\"">>, <<":">>, <<";">>, <<" ">>],
   Parts = binary:split(Bin, Punct, [global, trim]),
   Text = [ list_to_binary(xmerl_lib:to_lower(binary_to_list(W))) || W <- Parts, W /= <<>> ],
@@ -368,6 +374,8 @@ example(G, File) ->
     (W, first) -> grass:add_vertex(G, W), W;
     (W, Prev) ->
       grass:add_vertex(G, W),
+      grass:add_tag(G, W, <<"color">>, Color(W)),
+      grass:add_tag(G, W, <<"sides">>, erlang:size(W)),
       grass:add_edge(G, Prev, W),
       W
   end, first, Text),
